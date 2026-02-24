@@ -1,0 +1,141 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Now Playing Control</title>
+  <style>
+    body { font-family: -apple-system, system-ui, sans-serif; margin: 0; background:#0b0b0f; color:#fff; -webkit-user-select: none; user-select: none; }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 44px 20px 20px; }
+    h1 { margin: 0 0 10px; font-size: 20px; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; margin: 10px 0; }
+    input { flex: 1; min-width: 200px; font-size: 16px; padding: 12px 12px; border-radius: 10px; border: 1px solid #2b2b35; background: #12121a; color: #fff; outline: none; -webkit-user-select: text; user-select: text; }
+    button { font-size: 14px; padding: 10px 12px; border-radius: 10px; border: 1px solid #2b2b35; background: #171722; color: #fff; cursor: pointer; }
+    button:hover { background:#1f1f2e; }
+    .primary { background:#2a2aff; border-color:#2a2aff; }
+    .primary:hover { background:#3a3aff; }
+    .pill { font-size: 13px; opacity: .85; }
+    .status { margin-top: 10px; font-size: 14px; opacity: .9; }
+    .history { margin-top: 16px; }
+    .history h2 { font-size: 14px; margin: 0 0 8px; opacity: .7; }
+    .history-list { display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto; }
+    .history-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: #12121a; border: 1px solid #2b2b35; border-radius: 8px; cursor: pointer; }
+    .history-item:hover { background: #1a1a24; }
+    .history-item .text { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
+    .history-item .time { font-size: 11px; opacity: .5; flex-shrink: 0; margin-left: 8px; }
+    kbd { background:#1c1c28; border:1px solid #2b2b35; border-bottom-color:#3a3a48; padding:2px 6px; border-radius:6px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Now Playing</h1>
+
+    <div class="row">
+      <input id="text" placeholder="Artist – Track (or anything)" autocomplete="off" />
+      <button class="primary" id="send">Send to OBS</button>
+    </div>
+
+    <div class="row">
+      <button data-preset="ID">ID</button>
+      <button data-preset="Unreleased">Unreleased</button>
+      <button data-preset="Outro">Outro</button>
+      <button id="clear">Clear</button>
+    </div>
+
+    <div class="status" id="status">Ready.</div>
+
+    <div class="history">
+      <h2>History</h2>
+      <div class="history-list" id="history"></div>
+    </div>
+  </div>
+
+<script>
+  const $text = document.getElementById("text");
+  const $status = document.getElementById("status");
+  const $history = document.getElementById("history");
+
+  async function post(url, body) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || "Request failed");
+    return json;
+  }
+
+  function formatTime(ts) {
+    const d = new Date(ts);
+    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+
+  async function loadHistory() {
+    try {
+      const res = await fetch("/api/history");
+      const data = await res.json();
+      $history.innerHTML = data.history.length === 0
+        ? '<div style="opacity:.5;font-size:14px;">No tracks yet</div>'
+        : data.history.map(h => `
+          <div class="history-item" data-text="${h.text.replace(/"/g, '&quot;')}">
+            <span class="text">${h.text}</span>
+            <span class="time">${formatTime(h.time)}</span>
+          </div>
+        `).join("");
+    } catch (e) {
+      $history.innerHTML = '<div style="opacity:.5;font-size:14px;">Failed to load history</div>';
+    }
+  }
+
+  async function sendText(t) {
+    const text = (t ?? $text.value ?? "").trim();
+    $status.textContent = "Sending…";
+    try {
+      const r = await post("/api/set", { text });
+      $status.textContent = "✅ Updated: " + (r.text || "(blank)");
+      loadHistory();
+    } catch (e) {
+      $status.textContent = "❌ " + e.message;
+    }
+  }
+
+  document.getElementById("send").addEventListener("click", () => sendText());
+  document.getElementById("clear").addEventListener("click", async () => {
+    $text.value = "";
+    try { await post("/api/clear"); $status.textContent = "✅ Cleared"; }
+    catch(e){ $status.textContent = "❌ " + e.message; }
+  });
+
+  document.querySelectorAll("button[data-preset]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      $text.value = btn.dataset.preset;
+      sendText(btn.dataset.preset);
+    });
+  });
+
+  window.addEventListener("keydown", (e) => {
+    const isCmd = e.metaKey && !e.ctrlKey && !e.altKey;
+    if (!isCmd) return;
+
+    if (e.key === "Enter") { e.preventDefault(); sendText(); }
+    if (e.key === "1") { e.preventDefault(); $text.value="ID"; sendText("ID"); }
+    if (e.key === "2") { e.preventDefault(); $text.value="Unreleased"; sendText("Unreleased"); }
+    if (e.key === "3") { e.preventDefault(); $text.value="Outro"; sendText("Outro"); }
+    if (e.key === "0") { e.preventDefault(); $text.value=""; post("/api/clear").then(()=>{$status.textContent="✅ Cleared";}).catch(err=>{$status.textContent="❌ "+err.message;}); }
+  });
+
+  $history.addEventListener("click", (e) => {
+    const item = e.target.closest(".history-item");
+    if (item) {
+      const text = item.dataset.text;
+      $text.value = text;
+      sendText(text);
+    }
+  });
+
+  $text.focus();
+  loadHistory();
+</script>
+</body>
+</html>

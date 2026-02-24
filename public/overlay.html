@@ -1,0 +1,217 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Now Playing Overlay</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&family=Roboto:wght@100;300;400;500;700;900&family=Open+Sans:wght@300;400;500;600;700;800&family=Montserrat:wght@100;200;300;400;500;600;700;800;900&family=Poppins:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    body {
+      background: transparent;
+      font-family: Impact, Haettenschweiler, Arial Narrow Bold, sans-serif;
+    }
+    #container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 20px;
+    }
+    .text-line {
+      font-size: 48px;
+      font-weight: 700;
+      color: #ffffff;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      -webkit-text-stroke: 2px #000000;
+      paint-order: stroke fill;
+    }
+    .hidden { display: none !important; }
+
+    @keyframes pulseGlow {
+      0%, 100% {
+        filter: brightness(1);
+        transform: scale(1);
+      }
+      50% {
+        filter: brightness(1.2);
+        transform: scale(1.01);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div class="text-line" id="artist"></div>
+    <div class="text-line" id="track"></div>
+    <div class="text-line" id="label"></div>
+  </div>
+
+<script>
+  const $container = document.getElementById("container");
+  const $artist = document.getElementById("artist");
+  const $track = document.getElementById("track");
+  const $label = document.getElementById("label");
+
+  let currentSettings = {};
+
+  function formatLabel(label) {
+    let l = (label || "").trim();
+    // Remove existing brackets if present
+    if (l.startsWith("[") && l.endsWith("]")) {
+      l = l.slice(1, -1).trim();
+    }
+    return l ? `[${l}]` : "[Unreleased]";
+  }
+
+  function applySettings(settings) {
+    if (!settings) return;
+    currentSettings = settings;
+
+    const font = settings.fontFamily || "Impact, Haettenschweiler, Arial Narrow Bold, sans-serif";
+    const padding = settings.padding || 20;
+    const lineSpacing = settings.lineSpacing || 4;
+    const fontWeight = settings.fontWeight || (settings.fontBold !== false ? 700 : 400);
+
+    // Container styles
+    $container.style.padding = `${padding}px`;
+    $container.style.textAlign = settings.textAlign || "left";
+    $container.style.backgroundColor = settings.backgroundColor || "transparent";
+
+    // Artist line
+    $artist.style.fontFamily = font;
+    $artist.style.fontSize = `${settings.artistSize || 48}px`;
+    $artist.style.color = settings.artistColor || "#ffffff";
+    $artist.style.fontWeight = fontWeight;
+
+    // Track line
+    $track.style.fontFamily = font;
+    $track.style.fontSize = `${settings.trackSize || 40}px`;
+    $track.style.color = settings.trackColor || "#ffffff";
+    $track.style.marginTop = `${lineSpacing}px`;
+    $track.style.fontWeight = fontWeight;
+
+    // Label line
+    $label.style.fontFamily = font;
+    $label.style.fontSize = `${settings.labelSize || 32}px`;
+    $label.style.color = settings.labelColor || "#ffffff";
+    $label.style.marginTop = `${lineSpacing}px`;
+    $label.style.fontWeight = fontWeight;
+
+    // Apply stroke and shadow to all lines
+    const textLines = [$artist, $track, $label];
+    textLines.forEach((el) => {
+      // Text stroke
+      if (settings.textStroke !== false) {
+        const strokeWidth = settings.strokeWidth || 2;
+        const strokeColor = settings.strokeColor || "#000000";
+        el.style.webkitTextStroke = `${strokeWidth}px ${strokeColor}`;
+        el.style.paintOrder = settings.strokePosition === "inside" ? "fill stroke" : "stroke fill";
+      } else {
+        el.style.webkitTextStroke = "none";
+      }
+
+      // Text shadow and glow (glow first = behind, shadow second = in front)
+      const shadows = [];
+      if (settings.glowEnabled) {
+        const glowColor = settings.glowColor || "#ff0000";
+        const glowSize = settings.glowSize || 18;
+        // Multiple glow layers for softer effect that stays behind text
+        shadows.push(`0px 0px ${glowSize}px ${glowColor}`);
+        shadows.push(`0px 0px ${glowSize * 1.5}px ${glowColor}`);
+      }
+      if (settings.textShadow !== false) {
+        const offsetX = settings.shadowOffsetX || 2;
+        const offsetY = settings.shadowOffsetY || 3;
+        const blur = settings.shadowBlur || 0;
+        const shadowColor = settings.shadowColor || "#ff0000";
+        shadows.push(`${offsetX}px ${offsetY}px ${blur}px ${shadowColor}`);
+      }
+      if (settings.shadow2Enabled) {
+        const offsetX = settings.shadow2OffsetX || 4;
+        const offsetY = settings.shadow2OffsetY || 6;
+        const blur = settings.shadow2Blur || 0;
+        const shadowColor = settings.shadow2Color || "#000000";
+        shadows.push(`${offsetX}px ${offsetY}px ${blur}px ${shadowColor}`);
+      }
+      el.style.textShadow = shadows.length ? shadows.join(", ") : "none";
+
+      // Pulse animation
+      if (settings.pulseEnabled) {
+        el.style.animation = `pulseGlow ${settings.pulseSpeed || 2.5}s ease-in-out infinite`;
+      } else {
+        el.style.animation = "none";
+      }
+    });
+
+    // Show/hide label
+    if (settings.showLabel === false) {
+      $label.classList.add("hidden");
+    } else {
+      $label.classList.remove("hidden");
+    }
+  }
+
+  function updateDisplay(track, settings) {
+    applySettings(settings);
+
+    const artistText = (track?.artist || "").trim();
+    const trackText = (track?.title || "").trim();
+    const labelText = formatLabel(track?.label);
+
+    $artist.textContent = artistText;
+    $track.textContent = trackText;
+    $label.textContent = labelText;
+
+    // Hide everything if no track
+    if (!artistText && !trackText) {
+      $container.style.opacity = "0";
+    } else {
+      $container.style.opacity = "1";
+    }
+  }
+
+  // Connect to server-sent events for real-time updates
+  function connectSSE() {
+    const eventSource = new EventSource("/api/events");
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        updateDisplay(data.track, data.settings);
+      } catch (e) {
+        console.error("Failed to parse SSE data:", e);
+      }
+    };
+
+    eventSource.onerror = () => {
+      console.log("SSE connection lost, reconnecting...");
+      eventSource.close();
+      setTimeout(connectSSE, 2000);
+    };
+  }
+
+  // Initial load
+  fetch("/api/track")
+    .then(r => r.json())
+    .then(data => {
+      fetch("/api/settings")
+        .then(r => r.json())
+        .then(s => updateDisplay(data.track, s.settings));
+    })
+    .catch(console.error);
+
+  connectSSE();
+</script>
+</body>
+</html>

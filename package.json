@@ -1,0 +1,56 @@
+{
+  "name": "now-playing-control",
+  "version": "3.2.15",
+  "type": "module",
+  "description": "Now Playing overlay for OBS browser source with font customization",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "server": "node server.js",
+    "build": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:all": "electron-builder --mac --win"
+  },
+  "build": {
+    "appId": "com.nowplaying.control",
+    "productName": "Now Playing Control",
+    "mac": {
+      "category": "public.app-category.music",
+      "target": "dmg",
+      "icon": "assets/icon.icns"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "server.js",
+      "public/**/*",
+      "settings.json",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/**"
+    ],
+    "extraResources": [
+      {
+        "from": "rekordbox.xml",
+        "to": "rekordbox.xml",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ]
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "fast-xml-parser": "^5.3.3"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  }
+}
