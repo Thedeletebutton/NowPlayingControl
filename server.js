@@ -247,6 +247,18 @@ function loadRekordboxXML() {
 // Load at startup
 loadRekordboxXML();
 
+// Watch for changes and auto-reload
+let reloadTimeout;
+if (fs.existsSync(RB_XML)) {
+  fs.watch(RB_XML, () => {
+    clearTimeout(reloadTimeout);
+    reloadTimeout = setTimeout(() => {
+      console.log("🔄 Rekordbox XML changed, reloading...");
+      loadRekordboxXML();
+    }, 1000);
+  });
+}
+
 // -------------------- API --------------------
 app.get("/api/status", (_req, res) => {
   res.json({
