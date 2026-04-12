@@ -1,6 +1,6 @@
 {
   "name": "now-playing-control",
-  "version": "3.2.15",
+  "version": "3.2.16",
   "type": "module",
   "description": "Now Playing overlay for OBS browser source with font customization",
   "main": "main.js",
