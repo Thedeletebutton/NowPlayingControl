@@ -21,12 +21,16 @@ const HTTP_PORT = process.env.HTTP_PORT || "5050";
 
 // Find rekordbox.xml - check multiple locations
 function findRekordboxXML() {
+  // User-writable locations are checked FIRST so a freshly exported library
+  // always wins over the read-only copy bundled inside the packaged app.
+  // The bundled copy (process.resourcesPath) is only a last-resort seed.
   const candidates = [
     process.env.RB_XML,
-    path.join(process.resourcesPath || "", "rekordbox.xml"),
+    path.join(os.homedir(), "now-playing-control", "rekordbox.xml"),
     path.join(__dirname, "rekordbox.xml"),
     path.join(__dirname, "..", "rekordbox.xml"),
     path.join(os.homedir(), "rekordbox.xml"),
+    path.join(process.resourcesPath || "", "rekordbox.xml"),
   ].filter(Boolean);
 
   for (const p of candidates) {
@@ -247,15 +251,38 @@ function loadRekordboxXML() {
 // Load at startup
 loadRekordboxXML();
 
-// Watch for changes and auto-reload
+// Watch for changes and auto-reload.
+// Rekordbox exports by writing a new file and renaming it over the old one,
+// which detaches a plain fs.watch from the original inode. We debounce reloads,
+// re-arm fs.watch on every event, and add fs.watchFile polling as a fallback
+// so a re-export is always picked up.
 let reloadTimeout;
+function scheduleReload() {
+  clearTimeout(reloadTimeout);
+  reloadTimeout = setTimeout(() => {
+    console.log("🔄 Rekordbox XML changed, reloading...");
+    loadRekordboxXML();
+  }, 1000);
+}
+
+function armWatch() {
+  try {
+    const watcher = fs.watch(RB_XML, () => {
+      scheduleReload();
+      // Re-arm: after an atomic rename the watch points at a stale inode.
+      watcher.close();
+      setTimeout(armWatch, 100);
+    });
+  } catch (e) {
+    console.log("⚠️ fs.watch failed, relying on polling:", e.message);
+  }
+}
+
 if (fs.existsSync(RB_XML)) {
-  fs.watch(RB_XML, () => {
-    clearTimeout(reloadTimeout);
-    reloadTimeout = setTimeout(() => {
-      console.log("🔄 Rekordbox XML changed, reloading...");
-      loadRekordboxXML();
-    }, 1000);
+  armWatch();
+  // Polling fallback (2s) covers cases where fs.watch misses the rename entirely.
+  fs.watchFile(RB_XML, { interval: 2000 }, (curr, prev) => {
+    if (curr.mtimeMs !== prev.mtimeMs) scheduleReload();
   });
 }
 
